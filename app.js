@@ -1,3 +1,6 @@
+import { captureScreenshot } from './capture.js';
+import { addAnnotation, renderAnnotationsOverlay } from './annotations.js';
+
 let currentStream = null;
 let currentAnnotations = [];
 let currentImageData = null;
@@ -32,23 +35,19 @@ async function startTabShare() {
 
         video.onloadedmetadata = async () => {
             video.play();
-            setTimeout(() => {
-                const canvas = document.createElement('canvas');
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                const dataURL = canvas.toDataURL('image/png');
-                img.src = dataURL;
-                img.style.display = 'block';
-                video.style.display = 'none';
-                currentImageData = dataURL;
-                setupAnnotationCanvas();
-                stream.getTracks().forEach(track => track.stop());
-                currentStream = null;
-                document.getElementById('annotateButton').style.display = 'inline-block';
-                document.getElementById('saveAnnotationsButton').style.display = 'none';
-                renderAnnotationOverlay();
+            setTimeout(async () => {
+                captureScreenshot(video).then(dataURL => {
+                    img.src = dataURL;
+                    img.style.display = 'block';
+                    video.style.display = 'none';
+                    currentImageData = dataURL;
+                    setupAnnotationCanvas();
+                    stream.getTracks().forEach(track => track.stop());
+                    currentStream = null;
+                    document.getElementById('annotateButton').style.display = 'inline-block';
+                    document.getElementById('saveAnnotationsButton').style.display = 'none';
+                    renderAnnotationsOverlay(document.getElementById('annotationOverlay'), img, currentAnnotations);
+                });
             }, 300);
         };
     } catch (err) {
@@ -109,9 +108,9 @@ function confirmAnnotation() {
     const y = parseFloat(container.dataset.y);
     const text = document.getElementById('annotationText').value;
     if (text.trim() !== '') {
-        currentAnnotations.push({ x, y, content: text });
+        currentAnnotations = addAnnotation(currentAnnotations, x, y, text);
         drawAnnotations();
-        renderAnnotationOverlay();
+        renderAnnotationsOverlay(document.getElementById('annotationOverlay'), img, currentAnnotations);
     }
     container.style.display = 'none';
 }
@@ -135,37 +134,6 @@ function drawAnnotations() {
     });
 }
 
-function renderAnnotationOverlay() {
-    const img = document.getElementById('screenshot');
-    const overlay = document.getElementById('annotationOverlay');
-    overlay.innerHTML = '';
-    if (!img.src || annotationMode || currentAnnotations.length === 0) {
-        overlay.style.display = 'none';
-        return;
-    }
-    overlay.style.display = 'block';
-    overlay.style.width = img.width + 'px';
-    overlay.style.height = img.height + 'px';
-    overlay.style.left = img.offsetLeft + 'px';
-    overlay.style.top = img.offsetTop + 'px';
-    overlay.style.position = 'absolute';
-    overlay.style.pointerEvents = 'none';
-    currentAnnotations.forEach(a => {
-        const div = document.createElement('div');
-        div.textContent = a.content;
-        div.style.position = 'absolute';
-        div.style.left = (a.x * img.width) + 'px';
-        div.style.top = (a.y * img.height) + 'px';
-        div.style.background = 'white';
-        div.style.padding = '16px';
-        div.style.borderRadius = '4px';
-        div.style.fontSize = '16px';
-        div.style.color = 'black';
-        div.style.pointerEvents = 'none';
-        overlay.appendChild(div);
-    });
-}
-
 function enterAnnotationMode() {
     annotationMode = true;
     document.getElementById('annotationCanvas').style.pointerEvents = 'auto';
@@ -184,14 +152,13 @@ function saveAnnotations() {
     document.getElementById('annotateButton').style.display = 'inline-block';
     document.getElementById('saveAnnotationsButton').style.display = 'none';
     setupAnnotationCanvas();
-    renderAnnotationOverlay();
+    renderAnnotationsOverlay(document.getElementById('annotationOverlay'), document.getElementById('screenshot'), currentAnnotations);
 }
 
 function cancelScreenshot() {
     const img = document.getElementById('screenshot');
     const canvas = document.getElementById('annotationCanvas');
     if (img.src) {
-        // Save the screenshot and its annotations
         screenshots = [{
             image: img.src,
             annotations: [...currentAnnotations]
@@ -264,7 +231,7 @@ function showScreenshotInMain(index) {
     currentAnnotations = ss.annotations ? [...ss.annotations] : [];
     annotationMode = false;
     canvas.style.display = 'none';
-    renderAnnotationOverlay();
+    renderAnnotationsOverlay(overlay, img, currentAnnotations);
     currentScreenshotIndex = index;
 }
 
@@ -274,3 +241,5 @@ window.showScreenshotInMain = showScreenshotInMain;
 window.confirmAnnotation = confirmAnnotation;
 window.enterAnnotationMode = enterAnnotationMode;
 window.saveAnnotations = saveAnnotations;
+
+export { startTabShare, cancelScreenshot, showScreenshotInMain, confirmAnnotation, enterAnnotationMode, saveAnnotations };
