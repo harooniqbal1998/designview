@@ -11,15 +11,22 @@
         Screenshot
         <button onclick="startTabShare()" id="shareButton">Share Tab</button>
         <button onclick="cancelScreenshot()" id="cancelButton" style="display:none;">Cancel</button>
+        <button onclick="enterAnnotationMode()" id="annotateButton" style="display:none;">Annotate</button>
+        <button onclick="saveAnnotations()" id="saveAnnotationsButton" style="display:none;">Save Annotations</button>
     </div>
     <div class="content-area">
         <div id="display">
             <!-- Take a screenshot of the current tab. -->
             <video id="sharedVideo" autoplay playsinline style="display:none;"></video>
-            <img id="screenshot" style="max-width:100%; display:none;" />
+            <img id="screenshot" style="max-width:100%; display:none; position:relative;" />
+            <canvas id="annotationCanvas" style="display:none; position:absolute; left:0; top:0; pointer-events:none;"></canvas>
+            <div id="annotationInputContainer" style="display:none; position:absolute;">
+                <input type="text" id="annotationText" placeholder="Enter annotation" style="font-size:16px; padding:16px; background:white; border:none; border-radius:4px;" />
+                <button onclick="confirmAnnotation()">Add</button>
+            </div>
         </div>
     </div>
-    <div id="screenshot-list" style="margin-top: 20px;"></div>
+    <div id="screenshot-list" style="margin-top: 20px; position:relative;"></div>
     <script src="app.js"></script>
 </body>
 </html>
