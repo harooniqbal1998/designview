@@ -1,19 +1,18 @@
 let currentStream = null;
-let annotations = [];
+let currentAnnotations = [];
 let currentImageData = null;
 let annotationMode = false;
+let screenshots = [];
+let currentScreenshotIndex = null;
 
 async function startTabShare() {
-    // Stop previous stream if it exists
     if (currentStream) {
         currentStream.getTracks().forEach(track => track.stop());
         currentStream = null;
     }
 
     try {
-        const stream = await navigator.mediaDevices.getDisplayMedia({
-            video: true
-        });
+        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
         currentStream = stream;
         const video = document.getElementById('sharedVideo');
         const img = document.getElementById('screenshot');
@@ -26,35 +25,30 @@ async function startTabShare() {
         document.getElementById('saveAnnotationsButton').style.display = 'none';
         document.getElementById('annotationCanvas').style.display = 'none';
         document.getElementById('annotationInputContainer').style.display = 'none';
-        annotations = [];
+        document.getElementById('annotationOverlay').style.display = 'none';
+        currentAnnotations = [];
         annotationMode = false;
+        currentScreenshotIndex = null;
 
-        // Wait for the video to be ready
         video.onloadedmetadata = async () => {
             video.play();
             setTimeout(() => {
-                // Create a canvas and draw the current frame
                 const canvas = document.createElement('canvas');
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-                // Convert to base64
                 const dataURL = canvas.toDataURL('image/png');
                 img.src = dataURL;
                 img.style.display = 'block';
                 video.style.display = 'none';
                 currentImageData = dataURL;
                 setupAnnotationCanvas();
-
-                // Stop the stream
                 stream.getTracks().forEach(track => track.stop());
                 currentStream = null;
-
-                // Show Annotate button in preview mode
                 document.getElementById('annotateButton').style.display = 'inline-block';
                 document.getElementById('saveAnnotationsButton').style.display = 'none';
+                renderAnnotationOverlay();
             }, 300);
         };
     } catch (err) {
@@ -69,19 +63,17 @@ async function startTabShare() {
 function setupAnnotationCanvas() {
     const img = document.getElementById('screenshot');
     const canvas = document.getElementById('annotationCanvas');
-    // Use displayed size for canvas overlay
     canvas.width = img.width;
     canvas.height = img.height;
     canvas.style.width = img.width + 'px';
     canvas.style.height = img.height + 'px';
-    canvas.style.display = annotationMode ? 'block' : 'block'; // always show for drawing, but pointer events only in annotation mode
+    canvas.style.display = annotationMode ? 'block' : 'block';
     canvas.style.pointerEvents = annotationMode ? 'auto' : 'none';
     canvas.style.position = 'absolute';
     canvas.style.left = img.offsetLeft + 'px';
     canvas.style.top = img.offsetTop + 'px';
     canvas.style.zIndex = 10;
     drawAnnotations();
-
     if (annotationMode) {
         canvas.onclick = function (e) {
             const rect = canvas.getBoundingClientRect();
@@ -103,7 +95,6 @@ function showAnnotationInput(x, y) {
     container.style.left = (img.offsetLeft + x) + 'px';
     container.style.top = (img.offsetTop + y) + 'px';
     container.style.zIndex = 20;
-    // Store normalized coordinates for annotation
     container.dataset.x = x / img.width;
     container.dataset.y = y / img.height;
     document.getElementById('annotationText').value = '';
@@ -114,13 +105,13 @@ function confirmAnnotation() {
     if (!annotationMode) return;
     const container = document.getElementById('annotationInputContainer');
     const img = document.getElementById('screenshot');
-    // Convert normalized coordinates back to displayed coordinates
-    const x = parseFloat(container.dataset.x) * img.width;
-    const y = parseFloat(container.dataset.y) * img.height;
+    const x = parseFloat(container.dataset.x);
+    const y = parseFloat(container.dataset.y);
     const text = document.getElementById('annotationText').value;
     if (text.trim() !== '') {
-        annotations.push({ x, y, text });
+        currentAnnotations.push({ x, y, content: text });
         drawAnnotations();
+        renderAnnotationOverlay();
     }
     container.style.display = 'none';
 }
@@ -130,17 +121,48 @@ function drawAnnotations() {
     const canvas = document.getElementById('annotationCanvas');
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    annotations.forEach(a => {
+    currentAnnotations.forEach(a => {
         ctx.font = '16px sans-serif';
         ctx.textBaseline = 'top';
         const padding = 16;
-        const metrics = ctx.measureText(a.text);
+        const metrics = ctx.measureText(a.content);
         const textWidth = metrics.width;
         const textHeight = 20;
         ctx.fillStyle = 'white';
-        ctx.fillRect(a.x, a.y, textWidth + padding * 2, textHeight + padding * 2);
+        ctx.fillRect(a.x * img.width, a.y * img.height, textWidth + padding * 2, textHeight + padding * 2);
         ctx.fillStyle = 'black';
-        ctx.fillText(a.text, a.x + padding, a.y + padding);
+        ctx.fillText(a.content, a.x * img.width + padding, a.y * img.height + padding);
+    });
+}
+
+function renderAnnotationOverlay() {
+    const img = document.getElementById('screenshot');
+    const overlay = document.getElementById('annotationOverlay');
+    overlay.innerHTML = '';
+    if (!img.src || annotationMode || currentAnnotations.length === 0) {
+        overlay.style.display = 'none';
+        return;
+    }
+    overlay.style.display = 'block';
+    overlay.style.width = img.width + 'px';
+    overlay.style.height = img.height + 'px';
+    overlay.style.left = img.offsetLeft + 'px';
+    overlay.style.top = img.offsetTop + 'px';
+    overlay.style.position = 'absolute';
+    overlay.style.pointerEvents = 'none';
+    currentAnnotations.forEach(a => {
+        const div = document.createElement('div');
+        div.textContent = a.content;
+        div.style.position = 'absolute';
+        div.style.left = (a.x * img.width) + 'px';
+        div.style.top = (a.y * img.height) + 'px';
+        div.style.background = 'white';
+        div.style.padding = '16px';
+        div.style.borderRadius = '4px';
+        div.style.fontSize = '16px';
+        div.style.color = 'black';
+        div.style.pointerEvents = 'none';
+        overlay.appendChild(div);
     });
 }
 
@@ -151,6 +173,7 @@ function enterAnnotationMode() {
     document.getElementById('annotationInputContainer').style.display = 'none';
     document.getElementById('annotateButton').style.display = 'none';
     document.getElementById('saveAnnotationsButton').style.display = 'inline-block';
+    document.getElementById('annotationOverlay').style.display = 'none';
     setupAnnotationCanvas();
 }
 
@@ -161,37 +184,19 @@ function saveAnnotations() {
     document.getElementById('annotateButton').style.display = 'inline-block';
     document.getElementById('saveAnnotationsButton').style.display = 'none';
     setupAnnotationCanvas();
+    renderAnnotationOverlay();
 }
 
 function cancelScreenshot() {
     const img = document.getElementById('screenshot');
     const canvas = document.getElementById('annotationCanvas');
     if (img.src) {
-        // Draw annotations onto a new canvas and save as image
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = img.naturalWidth;
-        tempCanvas.height = img.naturalHeight;
-        const tempCtx = tempCanvas.getContext('2d');
-        const tempImg = new window.Image();
-        tempImg.onload = function () {
-            tempCtx.drawImage(tempImg, 0, 0);
-            // Draw annotations
-            annotations.forEach(a => {
-                tempCtx.font = '16px sans-serif';
-                tempCtx.textBaseline = 'top';
-                const padding = 16;
-                const metrics = tempCtx.measureText(a.text);
-                const textWidth = metrics.width;
-                const textHeight = 20;
-                tempCtx.fillStyle = 'white';
-                tempCtx.fillRect(a.x, a.y, textWidth + padding * 2, textHeight + padding * 2);
-                tempCtx.fillStyle = 'black';
-                tempCtx.fillText(a.text, a.x + padding, a.y + padding);
-            });
-            const annotatedDataURL = tempCanvas.toDataURL('image/png');
-            addScreenshotToList(annotatedDataURL, annotations.length);
-        };
-        tempImg.src = img.src;
+        // Save the screenshot and its annotations
+        screenshots = [{
+            image: img.src,
+            annotations: [...currentAnnotations]
+        }];
+        addScreenshotToList(screenshots[0]);
     }
     img.src = '';
     img.style.display = 'none';
@@ -201,29 +206,29 @@ function cancelScreenshot() {
     document.getElementById('annotateButton').style.display = 'none';
     document.getElementById('saveAnnotationsButton').style.display = 'none';
     document.getElementById('annotationInputContainer').style.display = 'none';
-    annotations = [];
+    document.getElementById('annotationOverlay').style.display = 'none';
+    currentAnnotations = [];
     annotationMode = false;
+    currentScreenshotIndex = null;
 }
 
-function addScreenshotToList(dataURL, annotationCount) {
+function addScreenshotToList(screenshotObj) {
     const list = document.getElementById('screenshot-list');
-    // Remove previous image if it exists (overwrite)
     while (list.firstChild) list.removeChild(list.firstChild);
     const wrapper = document.createElement('div');
     wrapper.style.display = 'inline-block';
     wrapper.style.position = 'relative';
     wrapper.style.marginRight = '10px';
     const newImg = document.createElement('img');
-    newImg.src = dataURL;
+    newImg.src = screenshotObj.image;
     newImg.style.maxWidth = '200px';
     newImg.style.cursor = 'pointer';
     newImg.onclick = function () {
-        showScreenshotInMain(newImg.src);
+        showScreenshotInMain(0);
     };
-    // Badge
-    if (annotationCount > 0) {
+    if (screenshotObj.annotations && screenshotObj.annotations.length > 0) {
         const badge = document.createElement('div');
-        badge.textContent = annotationCount;
+        badge.textContent = screenshotObj.annotations.length;
         badge.style.position = 'absolute';
         badge.style.top = '5px';
         badge.style.right = '5px';
@@ -242,20 +247,25 @@ function addScreenshotToList(dataURL, annotationCount) {
     list.appendChild(wrapper);
 }
 
-function showScreenshotInMain(src) {
+function showScreenshotInMain(index) {
+    if (screenshots.length === 0) return;
     const img = document.getElementById('screenshot');
     const video = document.getElementById('sharedVideo');
     const canvas = document.getElementById('annotationCanvas');
-    img.src = src;
+    const overlay = document.getElementById('annotationOverlay');
+    const ss = screenshots[index];
+    img.src = ss.image;
     img.style.display = 'block';
     video.style.display = 'none';
     document.getElementById('shareButton').style.display = 'inline-block';
     document.getElementById('cancelButton').style.display = 'inline-block';
     document.getElementById('annotateButton').style.display = 'inline-block';
     document.getElementById('saveAnnotationsButton').style.display = 'none';
-    annotations = [];
+    currentAnnotations = ss.annotations ? [...ss.annotations] : [];
     annotationMode = false;
     canvas.style.display = 'none';
+    renderAnnotationOverlay();
+    currentScreenshotIndex = index;
 }
 
 window.startTabShare = startTabShare;
