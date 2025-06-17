@@ -23,10 +23,18 @@ body {
 
 #display {
     flex: 1;
-    height: 90vh;
-    border: 2px solid rgb(103, 103, 246);
-    border-radius: var(--border-radius);
-    padding: var(--padding);
+    /* height: 90vh; */
+    /* border: 2px solid rgb(103, 103, 246); */
+    /* border-radius: var(--border-radius); */
+    /* padding: var(--padding); */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+#capture-button {
+    margin-top: 16px;
 }
 
 #controls {
@@ -35,4 +43,10 @@ body {
     background-color: gray;
     padding: var(--padding);
     border-radius: var(--border-radius);
+}
+
+video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
