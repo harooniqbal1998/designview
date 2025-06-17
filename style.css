@@ -1,0 +1,38 @@
+:root {
+    --background-color: #f7f7f7;
+    --border-radius: 12px;
+    --padding: 8px;
+}
+
+body {
+    background-color: var(--background-color);
+    font-family: sans-serif;
+    margin: var(--padding);
+}
+
+.header {
+    width: 100vw;
+    height: 5vh;
+    padding: var(--padding);
+}
+
+.content-area {
+    display: flex;
+    gap: 8px;
+}
+
+#display {
+    flex: 1;
+    height: 90vh;
+    border: 2px solid rgb(103, 103, 246);
+    border-radius: var(--border-radius);
+    padding: var(--padding);
+}
+
+#controls {
+    width: 30%;
+    height: 90vh;
+    background-color: gray;
+    padding: var(--padding);
+    border-radius: var(--border-radius);
+}
