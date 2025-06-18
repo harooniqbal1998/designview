@@ -28,6 +28,38 @@
         </div>
     </div>
     <div id="screenshot-list" style="margin-top: 20px; position:relative;"></div>
-    <script src="app.js" type="module"></script>
+    
+    <!-- Storage Info Section -->
+    <div id="storage-info" class="storage-info">
+        <div class="storage-header">
+            <h3>Storage Usage</h3>
+            <button onclick="toggleStorageDetails()" id="viewDetailsBtn">View Details</button>
+        </div>
+        <div class="storage-meter">
+            <div class="progress-bar">
+                <div id="storage-progress" class="progress-fill"></div>
+            </div>
+            <div id="storage-text" class="storage-text"></div>
+        </div>
+        <div id="storage-details" class="storage-details" style="display: none;">
+            <div id="storage-items"></div>
+            <button onclick="clearAllData()" class="clear-all-btn">Clear All Data</button>
+        </div>
+    </div>
+
+    <script type="module">
+        // Import all required functions
+        import * as App from './app.js';
+        
+        // Expose all functions to window object
+        Object.keys(App).forEach(key => {
+            window[key] = App[key];
+        });
+
+        // Initialize storage display
+        window.addEventListener('DOMContentLoaded', () => {
+            App.updateStorageDisplay();
+        });
+    </script>
 </body>
 </html>

@@ -1,5 +1,15 @@
 import { captureScreenshot } from './capture.js';
 import { addAnnotation, renderAnnotationsOverlay } from './annotations.js';
+import { saveScreenshot as storageSaveScreenshot, getAllScreenshots, deleteScreenshot as storageDeleteScreenshot } from './storage.js';
+import {
+    calculateAppStorageUsed,
+    formatBytes,
+    getStoragePercentage,
+    getEstimatedStorageLimit,
+    getStorageStatusColor,
+    getStorageDetails,
+    isStorageAvailable
+} from './storage-utils.js';
 
 let currentStream = null;
 let currentAnnotations = [];
@@ -159,11 +169,12 @@ function cancelScreenshot() {
     const img = document.getElementById('screenshot');
     const canvas = document.getElementById('annotationCanvas');
     if (img.src) {
-        screenshots = [{
+        const screenshotData = {
             image: img.src,
             annotations: [...currentAnnotations]
-        }];
-        addScreenshotToList(screenshots[0]);
+        };
+        saveScreenshot(screenshotData);
+        addScreenshotToList(screenshotData);
     }
     img.src = '';
     img.style.display = 'none';
@@ -181,18 +192,19 @@ function cancelScreenshot() {
 
 function addScreenshotToList(screenshotObj) {
     const list = document.getElementById('screenshot-list');
-    while (list.firstChild) list.removeChild(list.firstChild);
     const wrapper = document.createElement('div');
     wrapper.style.display = 'inline-block';
     wrapper.style.position = 'relative';
     wrapper.style.marginRight = '10px';
+
     const newImg = document.createElement('img');
     newImg.src = screenshotObj.image;
     newImg.style.maxWidth = '200px';
     newImg.style.cursor = 'pointer';
     newImg.onclick = function () {
-        showScreenshotInMain(0);
+        showScreenshotInMain(screenshotObj.id);
     };
+
     if (screenshotObj.annotations && screenshotObj.annotations.length > 0) {
         const badge = document.createElement('div');
         badge.textContent = screenshotObj.annotations.length;
@@ -210,6 +222,29 @@ function addScreenshotToList(screenshotObj) {
         badge.style.fontWeight = 'bold';
         wrapper.appendChild(badge);
     }
+
+    // Add delete button
+    const deleteBtn = document.createElement('button');
+    deleteBtn.textContent = '×';
+    deleteBtn.style.position = 'absolute';
+    deleteBtn.style.top = '5px';
+    deleteBtn.style.left = '5px';
+    deleteBtn.style.background = 'red';
+    deleteBtn.style.color = 'white';
+    deleteBtn.style.border = 'none';
+    deleteBtn.style.borderRadius = '50%';
+    deleteBtn.style.width = '24px';
+    deleteBtn.style.height = '24px';
+    deleteBtn.style.cursor = 'pointer';
+    deleteBtn.onclick = (e) => {
+        e.stopPropagation();
+        if (confirm('Delete this screenshot?')) {
+            deleteScreenshot(screenshotObj.id);
+            wrapper.remove();
+        }
+    };
+    wrapper.appendChild(deleteBtn);
+
     wrapper.appendChild(newImg);
     list.appendChild(wrapper);
 }
@@ -235,11 +270,121 @@ function showScreenshotInMain(index) {
     currentScreenshotIndex = index;
 }
 
+function loadSavedScreenshots() {
+    const savedScreenshots = getAllScreenshots();
+    savedScreenshots.forEach(screenshot => {
+        addScreenshotToList(screenshot);
+    });
+}
+
+function updateStorageDisplay() {
+    if (!isStorageAvailable()) {
+        document.getElementById('storage-info').style.display = 'none';
+        return;
+    }
+
+    const usedBytes = calculateAppStorageUsed();
+    const totalLimit = getEstimatedStorageLimit();
+    const percentage = getStoragePercentage(usedBytes);
+    const color = getStorageStatusColor(percentage);
+
+    const progressBar = document.getElementById('storage-progress');
+    const storageText = document.getElementById('storage-text');
+
+    progressBar.style.width = `${percentage}%`;
+    progressBar.style.backgroundColor = color;
+    storageText.textContent = `Used ${formatBytes(usedBytes)} of ~${formatBytes(totalLimit)} (${percentage}%)`;
+
+    if (percentage >= 80) {
+        showStorageWarning();
+    }
+}
+
+function showStorageWarning() {
+    const warning = document.createElement('div');
+    warning.className = 'storage-warning';
+    warning.textContent = 'Storage is almost full! Consider exporting your data.';
+    warning.style.color = '#f44336';
+    warning.style.fontSize = '12px';
+    warning.style.marginTop = '5px';
+
+    const storageInfo = document.getElementById('storage-info');
+    if (!storageInfo.querySelector('.storage-warning')) {
+        storageInfo.appendChild(warning);
+    }
+}
+
+function toggleStorageDetails() {
+    const details = document.getElementById('storage-details');
+    const items = document.getElementById('storage-items');
+
+    if (details.style.display === 'none') {
+        const storageItems = getStorageDetails();
+        items.innerHTML = '';
+
+        storageItems.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'storage-item';
+            div.innerHTML = `
+                <span>${item.key.replace('screenshot_tool_', '')}</span>
+                <span>${item.formattedSize}</span>
+            `;
+            items.appendChild(div);
+        });
+
+        details.style.display = 'block';
+    } else {
+        details.style.display = 'none';
+    }
+}
+
+function clearAllData() {
+    if (confirm('Are you sure you want to clear all data? This cannot be undone.')) {
+        localStorage.clear();
+        updateStorageDisplay();
+        document.getElementById('screenshot-list').innerHTML = '';
+        document.getElementById('storage-details').style.display = 'none';
+    }
+}
+
+// Wrap the storage functions to include storage display updates
+function saveScreenshot(screenshot) {
+    const result = storageSaveScreenshot(screenshot);
+    updateStorageDisplay();
+    return result;
+}
+
+function deleteScreenshot(id) {
+    const result = storageDeleteScreenshot(id);
+    updateStorageDisplay();
+    return result;
+}
+
+// Initialize storage display
+document.addEventListener('DOMContentLoaded', () => {
+    loadSavedScreenshots();
+    updateStorageDisplay();
+});
+
+// Expose functions to window object
 window.startTabShare = startTabShare;
 window.cancelScreenshot = cancelScreenshot;
 window.showScreenshotInMain = showScreenshotInMain;
 window.confirmAnnotation = confirmAnnotation;
 window.enterAnnotationMode = enterAnnotationMode;
 window.saveAnnotations = saveAnnotations;
+window.toggleStorageDetails = toggleStorageDetails;
+window.clearAllData = clearAllData;
 
-export { startTabShare, cancelScreenshot, showScreenshotInMain, confirmAnnotation, enterAnnotationMode, saveAnnotations };
+// Export all functions that need to be accessed globally
+export {
+    startTabShare,
+    cancelScreenshot,
+    showScreenshotInMain,
+    confirmAnnotation,
+    enterAnnotationMode,
+    saveAnnotations,
+    toggleStorageDetails,
+    clearAllData,
+    updateStorageDisplay
+};
